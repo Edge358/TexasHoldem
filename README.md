@@ -6,6 +6,10 @@ Runs as a Windows desktop app and as an Android app, one file each, nothing to i
 
 ![The Windows table mid-hand](Docs/images/windows-table.png)
 
+## Download
+
+Ready-to-run builds are on the [Releases page](https://github.com/Edge358/TexasHoldem/releases): a Windows zip and an Android APK, both signed. Windows: unzip and run `TexasHoldem.exe`. Android: allow installs from unknown sources, then open the APK.
+
 ## The game
 
 - You sit at an eight-seat table against seven AI players: a nit, a rock, a tight-aggressive, a loose-aggressive, a calling station, a weak-tight player and an aggressive fish. They play differently and you can learn to read them.
