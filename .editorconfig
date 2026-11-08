@@ -1,0 +1,53 @@
+# EditorConfig helps keep consistent coding styles across editors/IDEs
+# Ref: https://editorconfig.org/
+
+root = true
+
+# =====================================
+# Global defaults
+# =====================================
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# =====================================
+# C# source
+# =====================================
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+
+# =====================================
+# .NET project/build files
+# =====================================
+[*.{csproj,fsproj,vbproj,props,targets}]
+indent_style = space
+indent_size = 2
+end_of_line = crlf
+
+# =====================================
+# XAML views/resources
+# =====================================
+[*.xaml]
+indent_style = space
+indent_size = 2
+end_of_line = crlf
+
+# =====================================
+# Shell / CI scripts (Linux/CI style)
+# =====================================
+[*.{sh,yml,yaml}]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# =====================================
+# Markdown and text docs
+# (Let trailing spaces live for alignment)
+# =====================================
+[*.{md,txt}]
+trim_trailing_whitespace = false
+end_of_line = crlf

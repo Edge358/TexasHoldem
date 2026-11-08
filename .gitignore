@@ -1,0 +1,165 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Ll]og/
+[Ll]ogs/
+AppPackages/
+
+# Visual Studio cache and user files
+.cache/
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+# VS workspace state
+*.opensdf
+*.sdf
+ipch/
+
+# Misc Visual Studio backup files
+*.*~*
+*.backup
+*.old
+
+# Rider / VS Code / other IDEs
+.idea/
+*.sln.iml
+.vscode/
+*.code-workspace
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+*.nuspec
+project.lock.json
+# if using Paket
+.paket/
+paket-files/
+
+# Python
+__pycache__/
+*.pyc
+
+# Testing and coverage
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+.vs/TestStore/
+.vs/BenchmarkDotNet.Artifacts/
+
+# Publish profiles (keep .pubxml, ignore .user)
+Properties/PublishProfiles/*.user
+PublishProfiles/*.user
+# General publish artifacts (already under bin/, but in case of custom paths)
+artifacts/
+[Pp]ublish/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.appxupload
+*.msixupload
+*.pdb
+
+# SQLite and local data (avoid committing real data)
+Data/*.sqlite
+Data/*.sqlite3
+Data/*.db
+Data/*.db3
+Data/*-wal
+Data/*-shm
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Logs (in-repo only; app logs go to AppData)
+*.log
+
+# Security scan reports
+gitleaks-report.json
+gitleaks-*.json
+*.sarif
+reports/**
+security-reports/**
+
+# User/machine-specific project files
+*.csproj.user
+*.vbproj.user
+*.fsproj.user
+*.rsuser
+*.DotSettings.user
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+Icon?
+$RECYCLE.BIN/
+
+# Codex sandbox metadata
+.codex/
+
+# Tooling and temp files
+*.tmp
+*.temp
+~*
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+
+# Source control helpers
+*.patch
+*.diff
+
+# Security/env (never commit local secrets; keep examples)
+.venv/
+.env
+.env.*
+!.env.example
+secrets.json
+secrets.local.json
+# Optional: ignore accidental local signing scripts dropped into Docs
+Docs/*.ps1
+
+# Certificates / keys (never commit signing materials)
+*.pfx
+*.p12
+*.p7b
+*.pvk
+*.snk
+*.key
+*.cer
+*.crt
+*.pem
+*.der
+*.spc
+*.sst
+certs/**
+
+# Private docs (local-only)
+Docs/private/
+
+# Signing scripts (if kept outside Docs)
+sign-*.ps1
+
+# Local scratch / reference assets
+NotUsed/
+NotUsed/**

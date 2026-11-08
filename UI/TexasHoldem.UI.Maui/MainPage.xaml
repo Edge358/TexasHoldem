@@ -1,0 +1,934 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="TexasHoldem.UI.Maui.MainPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#2F151A">
+
+    <!--
+        Every AbsoluteLayout.LayoutBounds X and Y on the table surface below is
+        copied verbatim from the Canvas.Left / Canvas.Top of the matching element in
+        UI/TexasHoldem.UI.Wpf/MainWindow.xaml, except the sixteen deviations listed
+        here, each with its reason. Do not adjust any of the others.
+
+        PHASES 4 AND 5, approved 2026-09-10. The first two because the WPF sizes
+        cannot hold the widest legal content, the third to centre the card text:
+
+        - Hole card slots are 176 wide, not 150, and each X is shifted 13 to the left
+          so the slot stays centred where it was tuned. At 150 a hand of two ten-rank
+          cards clips to one card whenever either is a spade or a club, which covers
+          five of the six pocket-tens combinations.
+        - The centre panel sits at X 408, not 468, and its stack is 450 wide, not 360.
+          At 360 a board holding three or more ten-rank cards drops the last card.
+        - CardSlotLabelStyle carries TranslationY -5, because Android will not
+          vertically centre text in a fixed-height box. See MauiProgram.cs too.
+
+        The first two verified on device with the widest possible content:
+        "10s 10h" in all eight seats and a board of "10s 10h 10d 10c Ks".
+
+        PHASE 6, the touch pass, approved 2026-09-10. All chrome, none of it table:
+
+        - The card-visibility and game-size pickers (WPF 20,66 and 21,93) are gone
+          from the surface. Both are chosen from tiles in the settings sheet behind
+          the gear at 1196,10, which is new.
+        - The AI decision-log toggle (WPF canvas 20,-1) is removed on Android. So is
+          the Show Raise check box from WPF's bottom-left overlay; Save on Exit,
+          beside it there, was never ported.
+        - The AI and Log toggles are 76 x 68 at 912,642 and 1188,642, up from 36 x 24
+          and 48 x 24, to reach a 12 mm touch target. Both panels moved up with
+          them and now end at Y 636, clear of the toggles.
+        - StakesLabel at 21,63 is new. The stakes used to be readable from the
+          game-size picker, which is no longer on the table.
+        - The Raise button and its raise-amount box are removed from the action
+          bar. Typing an amount pops a keyboard over the table; the pot-fraction
+          buttons are the only raise path on Android. Windows keeps both.
+
+        SESSION 8, the end-of-hand reveal, decided 2026-09-11. Neither is layout:
+
+        - A masked seat is blank, and so is the board before the first round.
+          WPF shows "?? ??" and "?? ?? ?? ?? ??"; eight of them on the felt read
+          as clutter. Since session 9 MaskedCards in MauiTableView.cs is two card backs for a live seat and blank for a folded one.
+        - Masked seats are revealed on the table when the hand ends, per the
+          OTHER PLAYERS' CARDS tile in the settings sheet: SHOWDOWN reveals the
+          seats that showed, ALL END reveals all eight. WPF never reveals on the
+          table; its hand log is the only place the showdown cards appear.
+
+        SESSION 9, decided 2026-09-11 from the user's play on the tablet:
+
+        - The eight bet slots are 176 wide at the card slot's X, up from 110
+          centred over it, so "RR   +16 (16)" no longer clips.
+        - Seat 2's card slot and bet slot are at Y 298 and 263, 15 lower than
+          WPF's 283 and 248, mirroring seat 7, because the widened seat 1 bet
+          slot overlapped seat 2's.
+        - The dealer button is 40 wide (WPF 26), sits on the card slot's outer
+          end centred on its height (WPF: the slot's left edge in the bet row),
+          and is hidden until the first deal and after a reset.
+        - A folded seat's card slot is dimmed only while it shows cards; an
+          empty slot is full strength. WPF dims from the fold on.
+        - The bet label's hand total is always in parentheses: "X   (16)", not
+          WPF's "X   16".
+
+        SESSION 10, decided 2026-09-12 from the user's look at the tablet:
+
+        - Every bet slot is 30 tall and touches its card slot: Y = card Y + 44
+          for seats 1 and 8, card Y - 30 for the rest. The BetSlotBorderStyle
+          3-unit top margin is gone. WPF keeps its 33-tall slots, its margin,
+          and its uneven gaps.
+
+        Where a WPF style carried Margin="0,3,0,0" on an absolutely positioned
+        element, the Canvas value is kept as the X,Y here and the 3px is added to the
+        bounds height instead, so the rendered box lands in the same place it does on
+        Windows.
+    -->
+
+    <ContentPage.Resources>
+
+        <Style x:Key="SeatBoxStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#B3121212" />
+            <Setter Property="Stroke" Value="#664E4E4E" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 6" />
+        </Style>
+
+        <!-- WPF SeatTextBoxStyle, the shared chrome behind every seat text row. -->
+        <Style x:Key="SlotBorderStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#22000000" />
+            <Setter Property="Stroke" Value="#55282828" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="StrokeShape" Value="Rectangle" />
+        </Style>
+
+        <Style x:Key="SeatStackLabelStyle" TargetType="Label">
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+            <Setter Property="TextColor" Value="#FFF2F2F2" />
+            <Setter Property="FontSize" Value="28" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SeatStatusLabelStyle" TargetType="Label">
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+            <Setter Property="TextColor" Value="#FFDDDDDD" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="CardSlotBorderStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#22000000" />
+            <Setter Property="Stroke" Value="#55282828" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 3" />
+        </Style>
+
+        <Style x:Key="CardSlotLabelStyle" TargetType="Label">
+            <Setter Property="VerticalOptions" Value="Center" />
+            <!-- Android draws this line box filling the whole slot with the glyphs at
+                 its bottom and ~23 physical px of empty ascent space above. Gravity and
+                 padding cannot reclaim that: padding clips the glyphs instead. A render
+                 offset moves the text without touching layout. Measured, not guessed.
+
+                 COUPLED TO MauiProgram.ConfigureLabelRendering. This -5 was calibrated
+                 with Android's label font padding switched off. Remove that and this
+                 value is wrong. Re-measure with Tools/measure_card_slot.py, which
+                 should read 10px above and 9px below, before changing either one. -->
+            <Setter Property="TranslationY" Value="-5" />
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+            <Setter Property="TextColor" Value="#FFF2F2F2" />
+            <Setter Property="FontSize" Value="36" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+            <Setter Property="VerticalTextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="BetSlotBorderStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#22000000" />
+            <Setter Property="Stroke" Value="#55282828" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="4,2" />
+            <!-- No margin. Until session 10 a 3-unit top margin here made every bet
+                 slot draw 3 lower and 3 shorter than its LayoutBounds said, which is
+                 why the gaps to the card slots were uneven and could not be read
+                 from the coordinates. The bounds now say exactly where the box is.
+                 SlotBorderStyle, for the seat info rows, keeps its margin. -->
+            <Setter Property="StrokeShape" Value="Rectangle" />
+        </Style>
+
+        <Style x:Key="BetSlotLabelStyle" TargetType="Label">
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+            <Setter Property="TextColor" Value="#FFF2F2F2" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+            <Setter Property="VerticalTextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="CenterPanelStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#AA0E0E0E" />
+            <Setter Property="Stroke" Value="#664E4E4E" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+        </Style>
+
+        <Style x:Key="CommunityCardBorderStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#77FFFFFF" />
+            <Setter Property="Stroke" Value="#66FFFFFF" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 3" />
+        </Style>
+
+        <Style x:Key="CommunityCardLabelStyle" TargetType="Label">
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+            <Setter Property="TextColor" Value="#FFF2F2F2" />
+            <Setter Property="FontSize" Value="40" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+        </Style>
+
+        <!--
+            Phase 6, the settings sheet behind the gear. Every tile is 72 units
+            tall: the surface scales by about 1.906 on the 2560 x 1600 emulator,
+            so 72 units is 137 physical pixels, clear of the 130 px that is 12 mm
+            on the tablet. The whole tile is the touch target, not the label in it.
+        -->
+        <Style x:Key="SettingsSectionStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#B9A0A4" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+        </Style>
+
+        <Style x:Key="ChoiceTileLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#8A7A7D" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+            <Setter Property="HorizontalOptions" Value="Center" />
+            <Setter Property="VerticalOptions" Value="Center" />
+        </Style>
+
+        <Style x:Key="ExtraButtonToggleStyle" TargetType="Border">
+            <Setter Property="HeightRequest" Value="72" />
+            <Setter Property="BackgroundColor" Value="#1C1416" />
+            <Setter Property="Stroke" Value="#4D3A3E" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeShape">
+                <Setter.Value>
+                    <RoundRectangle CornerRadius="6" />
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="LogPanelStyle" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="#141414" />
+            <Setter Property="Stroke" Value="#333333" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="StrokeShape" Value="Rectangle" />
+        </Style>
+
+        <!-- PALETTE-BLOCK-START -->
+        <!--
+            Phase 6 action-bar palette.
+
+            Seven roles, not five: the raise sizes split into the three groups
+            the user asked for on 2026-09-10: below the pot, the pot itself,
+            and above the pot, so the bar reads as a ramp rather than a row of
+            identical amber buttons.
+
+            No red anywhere. Red was tried on ALL IN and rejected: it reads as
+            an error state, which is the wrong message at the moment the player
+            is making the boldest move in the game.
+
+            Colour carries two jobs at once: which action a button performs, and
+            whether it is live right now. The Disabled visual state is what
+            preserves the "it is your turn" signal that the stock template gave
+            away for free by grey-ing everything out. Its grey is
+            (200,200,200) on (20,20,20), sampled from the pre-palette build so
+            the start screen looks exactly as it did.
+
+            Next Hand is the one button whose colour means something other than
+            which action it performs, because the action changes. During a hand
+            it folds you and skips the showdown; once the hand is over it just
+            deals the next one. SetNextHandHighlight already toggles at exactly
+            those two moments, so gold is the safe state and the neutral grey is
+            the "this does something you may not want" state. Pressing a big
+            gold button should never muck a good hand.
+
+            All four NextHand colours are read back by MainPage.xaml.cs in
+            SetNextHandHighlight, and the four Fold and ButtonOff colours in
+            PaintFoldButtons. If you rename them, fix those methods too. The
+            settings sheet's Quit Game button references Fold* by StaticResource
+            and follows a rename on its own. AllIn* is shared by ALL IN's Normal
+            state and the sheet's Back to Game button, so the two greens cannot
+            drift apart.
+        -->
+        <Color x:Key="FoldColor">#A34A55</Color>
+        <Color x:Key="FoldTextColor">#FFF0F1</Color>
+        <Color x:Key="ButtonOffColor">#C8C8C8</Color>
+        <Color x:Key="ButtonOffTextColor">#141414</Color>
+        <Color x:Key="NextHandColor">#5E5652</Color>
+        <Color x:Key="NextHandTextColor">#EDE9E6</Color>
+        <Color x:Key="NextHandGlowColor">#C8A34A</Color>
+        <Color x:Key="NextHandGlowTextColor">#1A1A1A</Color>
+        <Color x:Key="AllInColor">#2F7048</Color>
+        <Color x:Key="AllInTextColor">#F0FCF4</Color>
+
+
+
+        <Style x:Key="CallButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#6E8AAE" />
+                                <Setter Property="TextColor" Value="#F4F7FC" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#C8C8C8" />
+                                <Setter Property="TextColor" Value="#141414" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+
+        <Style x:Key="RaiseLowButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#2F7E92" />
+                                <Setter Property="TextColor" Value="#F2FBFD" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#C8C8C8" />
+                                <Setter Property="TextColor" Value="#141414" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+
+        <Style x:Key="PotButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#3E8E5A" />
+                                <Setter Property="TextColor" Value="#F2FFF6" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#C8C8C8" />
+                                <Setter Property="TextColor" Value="#141414" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+
+        <Style x:Key="RaiseHighButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#2C4C70" />
+                                <Setter Property="TextColor" Value="#EDF2F9" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#C8C8C8" />
+                                <Setter Property="TextColor" Value="#141414" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+
+        <Style x:Key="AllInButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="{StaticResource AllInColor}" />
+                                <Setter Property="TextColor" Value="{StaticResource AllInTextColor}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#C8C8C8" />
+                                <Setter Property="TextColor" Value="#141414" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+
+        <Style x:Key="NextHandButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="BackgroundColor" Value="{StaticResource NextHandColor}" />
+            <Setter Property="TextColor" Value="#EDE9E6" />
+        </Style>
+
+        <!--
+            Both Fold buttons use this style, and it carries no colours of its
+            own. Between hands they are a special case: still tappable, so Fold
+            keeps advancing the hand, but painted as inactive so they do not
+            compete with Next Hand. A visual state with colours would fight
+            that, because MAUI applies the Normal state after IsEnabled is set
+            and would repaint the button red. PaintFoldButtons in
+            MainPage.xaml.cs owns the colours in every state.
+
+            The empty CommonStates group is deliberate and load-bearing. Without
+            it the implicit Button style in Styles.xaml supplies its own group,
+            whose Disabled state is theme-bound: light grey in light mode, near
+            black (#404040) in dark mode. That state outranks the colours set
+            from code, so on a tablet in dark mode the disabled Fold went almost
+            black while the enabled one between hands stayed light grey. The
+            emulator runs in light mode, where the two happen to coincide.
+            Found by the 2026-09-11 review.
+        -->
+        <Style x:Key="FoldTappableButtonStyle" TargetType="Button">
+            <Setter Property="HeightRequest" Value="66" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="ClassId" Value="BarButton" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="Disabled" />
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+        <!-- PALETTE-BLOCK-END -->
+
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*,Auto">
+
+        <Grid x:Name="TableHost" Grid.Row="0" SizeChanged="TableHost_SizeChanged">
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#2F151A" Offset="0" />
+                    <GradientStop Color="#31161B" Offset="0.5" />
+                    <GradientStop Color="#2F151A" Offset="1" />
+                </LinearGradientBrush>
+            </Grid.Background>
+
+            <!-- The 1280x720 design surface. Scaled uniformly in TableHost_SizeChanged
+                 and centred, which is what the WPF Viewbox with Stretch="Uniform" does.
+                 The letterbox bands show the gradient above. -->
+            <Grid x:Name="DesignSurface"
+                  WidthRequest="1280"
+                  HeightRequest="720"
+                  HorizontalOptions="Center"
+                  VerticalOptions="Center">
+
+                <Image Source="cardtable.png" Aspect="Fill" />
+
+                <AbsoluteLayout x:Name="TableLayout">
+
+                    <!--
+                        Top-left chrome. On Windows the card-visibility and
+                        game-size pickers and the AI decision-log toggle also sit
+                        here. Phase 6 took all three off the table: the pickers
+                        became tiles in the settings sheet behind the gear at top
+                        right, and the decision-log toggle was removed. Neither
+                        picker could reach 12 mm here: only 174 units of column
+                        are clear above the seat 7 box, and two 12 mm pickers plus
+                        captions need about 180.
+                    -->
+                    <Label x:Name="HandCounterLabel"
+                           AbsoluteLayout.LayoutBounds="20,14,AutoSize,AutoSize"
+                           Text="Hands: 0" TextColor="#E6E6E6" FontSize="18" FontAttributes="Bold" />
+
+                    <Label x:Name="BuyInCounterLabel"
+                           AbsoluteLayout.LayoutBounds="21,40,AutoSize,AutoSize"
+                           Text="Buy-Ins: 1" TextColor="#E6E6E6" FontSize="16" />
+
+                    <!--
+                        Phase 6. The stakes used to be readable from the game-size
+                        picker sitting here on the table. That picker became tiles in
+                        the settings sheet, which left no way to see what game you are
+                        playing, so the value is echoed here as plain text.
+                    -->
+                    <Label x:Name="StakesLabel"
+                           AbsoluteLayout.LayoutBounds="21,63,AutoSize,AutoSize"
+                           Text="Stakes: 1/2" TextColor="#E6E6E6" FontSize="16"
+                           LineBreakMode="NoWrap" />
+
+                    <!-- Seat info boxes -->
+                    <Border x:Name="Seat1InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="756,4,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat1NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 1" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat1StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat1StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat2InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="1106,184,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat2NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 2" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat2StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat2StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat3InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="1106,396,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat3NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 3" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat3StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat3StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat4InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="744,587,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat4NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 4" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat4StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat4StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat5InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="409,587,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat5NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 5" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat5StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat5StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat6InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="10,440,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat6NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 6" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat6StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat6StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat7InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="10,174,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat7NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 7" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat7StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat7StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="Seat8InfoBorder" Style="{StaticResource SeatBoxStyle}" AbsoluteLayout.LayoutBounds="362,4,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="150">
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat8NameLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Player 8" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat8StackLabel" Style="{StaticResource SeatStackLabelStyle}" Text="0" /></Border>
+                            <Border Style="{StaticResource SlotBorderStyle}"><Label x:Name="Seat8StatusLabel" Style="{StaticResource SeatStatusLabelStyle}" Text="Waiting" /></Border>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Centre panel: board, pot, turn info -->
+                    <Border Style="{StaticResource CenterPanelStyle}" AbsoluteLayout.LayoutBounds="408,280,AutoSize,AutoSize">
+                        <VerticalStackLayout WidthRequest="450">
+                            <Border Style="{StaticResource CommunityCardBorderStyle}">
+                                <Label x:Name="CommunityCardsLabel" Style="{StaticResource CommunityCardLabelStyle}" Text="" />
+                            </Border>
+                            <Border Style="{StaticResource SlotBorderStyle}">
+                                <Label x:Name="PotLabel" Style="{StaticResource SeatStackLabelStyle}" Text="Pot: 0" />
+                            </Border>
+                            <Label x:Name="TurnInfoLabel" Margin="2,6,2,0" TextColor="#E6E6E6" FontSize="20"
+                                   HorizontalTextAlignment="Center" LineBreakMode="NoWrap" Text="Waiting for game start..." />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Hole card slots, 176 x 44. Windows uses 150; see the header. -->
+                    <Border x:Name="Seat1CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="743,185,176,44">
+                        <Label x:Name="Seat1CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat2CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="884,298,176,44">
+                        <Label x:Name="Seat2CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat3CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="884,399,176,44">
+                        <Label x:Name="Seat3CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat4CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="731,490,176,44">
+                        <Label x:Name="Seat4CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat5CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="410,490,176,44">
+                        <Label x:Name="Seat5CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat6CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="229,421,176,44">
+                        <Label x:Name="Seat6CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat7CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="229,298,176,44">
+                        <Label x:Name="Seat7CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat8CardsBorder" Style="{StaticResource CardSlotBorderStyle}" AbsoluteLayout.LayoutBounds="364,185,176,44">
+                        <Label x:Name="Seat8CardsLabel" Style="{StaticResource CardSlotLabelStyle}" Text="" />
+                    </Border>
+
+                    <!--
+                        Bet labels. Were 110 wide, centred over the 176 card slots; widened to the
+                        slot width in session 9 so "RR   +16 (16)" no longer clips. That made seat 1's
+                        slot overlap seat 2's, so seat 2's card slot and bet slot moved down 15 to
+                        mirror seat 7's.
+
+                        Session 10, 2026-09-12: every bet slot is 30 tall and touches its card slot,
+                        so the pair reads as one box with a line across it. Seats 1 and 8 have the
+                        bet slot under the cards (Y = card Y + 44); the other six have it above
+                        (Y = card Y - 30). Before this the gaps were 0, 6 and 4 physical pixels on
+                        the tablet for seats 1, 8 and the rest, because the style's 3-unit top
+                        margin (now removed) shifted the drawn box. Seat 1's slot ends at 259 and
+                        seat 2's starts at 268, seat 8's ends at 259 and seat 7's starts at 268:
+                        9 clear in both overlapping columns.
+                    -->
+                    <Border x:Name="Seat1BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="743,229,176,30">
+                        <Label x:Name="Seat1BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat2BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="884,268,176,30">
+                        <Label x:Name="Seat2BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat3BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="884,369,176,30">
+                        <Label x:Name="Seat3BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat4BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="731,460,176,30">
+                        <Label x:Name="Seat4BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat5BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="410,460,176,30">
+                        <Label x:Name="Seat5BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat6BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="229,391,176,30">
+                        <Label x:Name="Seat6BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat7BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="229,268,176,30">
+                        <Label x:Name="Seat7BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+                    <Border x:Name="Seat8BetBorder" Style="{StaticResource BetSlotBorderStyle}" AbsoluteLayout.LayoutBounds="364,229,176,30">
+                        <Label x:Name="Seat8BetLabel" Style="{StaticResource BetSlotLabelStyle}" Text="" />
+                    </Border>
+
+                    <!--
+                        Dealer button. Placed and shown by MauiTableView.SetDealerSeat at the
+                        first deal; hidden until then, because at 40 wide (session 9) its
+                        placeholder position was a visible blob on the rail before the game.
+                    -->
+                    <Ellipse x:Name="DealerButton" IsVisible="False"
+                             AbsoluteLayout.LayoutBounds="835,125,40,40"
+                             Fill="#E6E0AA" Stroke="#1A1A1A" StrokeThickness="2" />
+
+                    <!--
+                        The two overlay panels and their toggles. WPF positions these in
+                        code from the toggles' measured bounds; the Phase 4 port resolved
+                        that arithmetic once against the fixed 1280x720 surface.
+
+                        Phase 6 enlarged both toggles to 76 x 68 at Y 642 for a 12 mm
+                        target, so both panels now end at Y 636, 6 above the toggles.
+                        Left where the old small toggles put them, an open panel covered
+                        its own toggle. Found by the cold-read doc review, 2026-09-10.
+
+                        2026-09-11, the user's decision: the Log toggle is hidden on
+                        Android, not removed. The panel, the log writes and the
+                        Windows code are untouched, so it can come back by deleting
+                        one IsVisible. The AI panel moved into the corner the Log
+                        toggle vacated: right of the AI toggle (which ends at X 988),
+                        below the seat 3 box (which ends at Y 526), out to the right
+                        margin and down to the toggles' bottom edge, 6 units clear
+                        on each side. It used to cover seat 3's last-action line;
+                        now it covers nothing.
+                    -->
+                    <Button x:Name="AiRecommendationToggle"
+                            AbsoluteLayout.LayoutBounds="912,642,76,68"
+                            Text="AI" FontSize="17" FontAttributes="Bold" Padding="0"
+                            BackgroundColor="#141414" BorderColor="#333333" BorderWidth="1" TextColor="#E6E6E6"
+                            Clicked="AiRecommendationToggle_Clicked" />
+
+                    <Border x:Name="AiRecommendationPanel"
+                            Style="{StaticResource LogPanelStyle}"
+                            AbsoluteLayout.LayoutBounds="994,532,270,178"
+                            IsVisible="False">
+                        <Label x:Name="AiRecommendationLabel" Padding="10,6,6,4" FontSize="16" BackgroundColor="#101010"
+                               TextColor="#E6E6E6" Text="AI recommendations will appear here." />
+                    </Border>
+
+                    <Button x:Name="ActionLogToggle"
+                            AbsoluteLayout.LayoutBounds="1188,642,76,68"
+                            IsVisible="False"
+                            Text="Log" FontSize="17" FontAttributes="Bold" Padding="0"
+                            BackgroundColor="#141414" BorderColor="#333333" BorderWidth="1" TextColor="#E6E6E6"
+                            Clicked="ActionLogToggle_Clicked" />
+
+                    <Border x:Name="ActionLogPanel"
+                            Style="{StaticResource LogPanelStyle}"
+                            AbsoluteLayout.LayoutBounds="934,0,330,636"
+                            IsVisible="False">
+                        <ScrollView x:Name="ActionLogScroll" Padding="6,4" BackgroundColor="#101010">
+                            <Label x:Name="ActionLogLabel" FontSize="12" TextColor="#E6E6E6" Text="" />
+                        </ScrollView>
+                    </Border>
+
+                    <!--
+                        The gear and its sheet are declared last so they paint
+                        over the action log panel, which occupies the same
+                        top-right corner when it is open.
+                    -->
+                    <Button x:Name="SettingsButton"
+                            AbsoluteLayout.LayoutBounds="1196,10,68,68"
+                            Text="&#x2699;&#xFE0E;"
+                            FontSize="32"
+                            Padding="0"
+                            BackgroundColor="#141414" BorderColor="#4D3A3E" BorderWidth="2"
+                            TextColor="#E6E6E6" CornerRadius="8"
+                            Clicked="SettingsButton_Clicked" />
+
+                    <Grid x:Name="SettingsOverlay"
+                          AbsoluteLayout.LayoutBounds="0,0,1280,720"
+                          BackgroundColor="#D9000000"
+                          IsVisible="False">
+
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="SettingsOverlay_Tapped" />
+                        </Grid.GestureRecognizers>
+
+                        <Border WidthRequest="640" HeightRequest="660"
+                                HorizontalOptions="Center" VerticalOptions="Center"
+                                BackgroundColor="#150C0E" Stroke="#664E4E4E" StrokeThickness="2"
+                                Padding="20">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="10" />
+                            </Border.StrokeShape>
+
+                            <!-- Swallow taps so they do not reach the scrim and close the sheet. -->
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer />
+                            </Border.GestureRecognizers>
+
+                            <VerticalStackLayout Spacing="0">
+
+                                <!--
+                                    The title row. Quit Game sits at the right of the title,
+                                    away from Back to Game, so a tap meant for one cannot land
+                                    on the other. It closes the app outright: the activity
+                                    finishes and MainActivity.OnDestroy ends the process, so
+                                    the player never has to learn Android's Back, Home or
+                                    recents gestures to put the game away. 220 x 72 keeps the
+                                    12 mm tap size with room for the two words. Moved here
+                                    2026-09-11; it read "Quit" until session 9, which the user
+                                    found could be taken as "quit settings".
+                                -->
+                                <Grid ColumnDefinitions="*,Auto" HeightRequest="72">
+                                    <Label Grid.Column="0" Text="Settings" TextColor="#F2F2F2" FontSize="27"
+                                           FontAttributes="Bold" LineBreakMode="NoWrap" VerticalOptions="Center" />
+                                    <Button x:Name="QuitButton" Grid.Column="1" Text="Quit Game" Margin="0"
+                                            WidthRequest="220" HeightRequest="72" VerticalOptions="Center"
+                                            FontSize="19" FontAttributes="Bold"
+                                            BackgroundColor="{StaticResource FoldColor}"
+                                            TextColor="{StaticResource FoldTextColor}" CornerRadius="8"
+                                            Clicked="QuitButton_Clicked" />
+                                </Grid>
+
+                                <!--
+                                    One three-way choice. ALWAYS shows every seat all hand;
+                                    SHOWDOWN and ALL END mask the other seats during the hand
+                                    and reveal them when it ends, the showdown seats or all
+                                    eight. The caption carries the meaning so the tiles stay
+                                    short. Decided 2026-09-11.
+                                -->
+                                <Label Text="OTHER PLAYERS' CARDS" Style="{StaticResource SettingsSectionStyle}" Margin="0,28,0,4" />
+                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                    <Border x:Name="CardAlwaysTile" Grid.Column="0" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="CardAlwaysTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="CardAlwaysTileLabel" Text="ALWAYS" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="CardShowdownTile" Grid.Column="1" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="CardShowdownTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="CardShowdownTileLabel" Text="SHOWDOWN" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="CardAllEndTile" Grid.Column="2" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="CardAllEndTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="CardAllEndTileLabel" Text="ALL END" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                </Grid>
+
+                                <Label x:Name="StakesSectionLabel" Text="STAKES" Style="{StaticResource SettingsSectionStyle}" Margin="0,10,0,4" />
+                                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                                    <Border x:Name="StakeOneTile" Grid.Column="0" Grid.Row="0" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="StakeOneTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="StakeOneTileLabel" Text="1/2" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="StakeTwoTile" Grid.Column="1" Grid.Row="0" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="StakeTwoTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="StakeTwoTileLabel" Text="2/4" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="StakeFiveTile" Grid.Column="2" Grid.Row="0" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="StakeFiveTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="StakeFiveTileLabel" Text="5/10" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="StakeTenTile" Grid.Column="0" Grid.Row="1" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="StakeTenTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="StakeTenTileLabel" Text="10/20" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="StakeFiftyTile" Grid.Column="1" Grid.Row="1" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="StakeFiftyTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="StakeFiftyTileLabel" Text="50/100" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                    <Border x:Name="StakeHundredTile" Grid.Column="2" Grid.Row="1" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="StakeHundredTile_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="StakeHundredTileLabel" Text="100/200" Style="{StaticResource ChoiceTileLabelStyle}" />
+                                    </Border>
+                                </Grid>
+
+                                <Label Text="EXTRA RAISE BUTTONS" Style="{StaticResource SettingsSectionStyle}" Margin="0,12,0,4" />
+                                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
+                                    <Border x:Name="OneThirdToggle" Grid.Column="0" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OneThirdToggle_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="OneThirdToggleLabel" Text="1/3" TextColor="#8A7A7D" FontSize="21" FontAttributes="Bold"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                    <Border x:Name="TwoThirdsToggle" Grid.Column="1" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="TwoThirdsToggle_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="TwoThirdsToggleLabel" Text="2/3" TextColor="#8A7A7D" FontSize="21" FontAttributes="Bold"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                    <Border x:Name="OnePointFiveToggle" Grid.Column="2" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnePointFiveToggle_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="OnePointFiveToggleLabel" Text="1.5X" TextColor="#8A7A7D" FontSize="21" FontAttributes="Bold"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                    <Border x:Name="ThreeXToggle" Grid.Column="3" Style="{StaticResource ExtraButtonToggleStyle}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="ThreeXToggle_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="ThreeXToggleLabel" Text="3X" TextColor="#8A7A7D" FontSize="21" FontAttributes="Bold"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                </Grid>
+
+                                <!--
+                                    Back to Game and Quit Game are painted in the action bar's
+                                    own colours, ALL IN green and Fold red, so they read as
+                                    buttons and not as two more setting tiles, and green
+                                    against red says which one is safe. Quit Game is in the
+                                    title row at the top of the sheet; it used to sit right
+                                    under this button, where a tap meant for it could close the
+                                    app. The gap above separates the last row of tiles from the
+                                    button. Asked for by the user 2026-09-11. This button was
+                                    gold and read "Done" until session 9.
+                                -->
+                                <Button x:Name="SettingsDoneButton" Text="Back to Game" Margin="0,48,0,0"
+                                        HeightRequest="76" FontSize="21" FontAttributes="Bold"
+                                        BackgroundColor="{StaticResource AllInColor}"
+                                        TextColor="{StaticResource AllInTextColor}" CornerRadius="8"
+                                        Clicked="SettingsDoneButton_Clicked" />
+
+                            </VerticalStackLayout>
+                        </Border>
+                    </Grid>
+
+                </AbsoluteLayout>
+            </Grid>
+        </Grid>
+
+        <!-- The action bar, below the scaled surface as on Windows. LayoutActionBar
+             in MainPage.xaml.cs sizes every button at runtime; read it before
+             changing anything here. -->
+        <Border x:Name="ActionBarHost" Grid.Row="1" BackgroundColor="#141414" Stroke="#333333"
+                StrokeThickness="0" Padding="6" SizeChanged="ActionBarHost_SizeChanged">
+            <HorizontalStackLayout x:Name="ActionBar" HorizontalOptions="Center" VerticalOptions="Center">
+                <Button x:Name="FoldLeftButton" Text="Fold" Style="{StaticResource FoldTappableButtonStyle}" Clicked="FoldButton_Clicked" />
+                <Button x:Name="CheckCallButton" Text="Check/Call" Style="{StaticResource CallButtonStyle}" Clicked="CheckCallButton_Clicked" />
+                <Button x:Name="OneThirdPotButton" Text="1/3" Style="{StaticResource RaiseLowButtonStyle}" IsVisible="False" Clicked="OneThirdPotButton_Clicked" />
+                <Button x:Name="HalfPotButton" Text="1/2" Style="{StaticResource RaiseLowButtonStyle}" Clicked="HalfPotButton_Clicked" />
+                <Button x:Name="TwoThirdsPotButton" Text="2/3" Style="{StaticResource RaiseLowButtonStyle}" IsVisible="False" Clicked="TwoThirdsPotButton_Clicked" />
+                <Button x:Name="PotButton" Text="POT" Style="{StaticResource PotButtonStyle}" Clicked="PotButton_Clicked" />
+                <Button x:Name="OnePointFivePotButton" Text="1.5X" Style="{StaticResource RaiseHighButtonStyle}" IsVisible="False" Clicked="OnePointFivePotButton_Clicked" />
+                <Button x:Name="TwoXPotButton" Text="2X" Style="{StaticResource RaiseHighButtonStyle}" Clicked="TwoXPotButton_Clicked" />
+                <Button x:Name="ThreeXPotButton" Text="3X" Style="{StaticResource RaiseHighButtonStyle}" IsVisible="False" Clicked="ThreeXPotButton_Clicked" />
+                <Button x:Name="AllInButton" Text="ALL IN" Style="{StaticResource AllInButtonStyle}" Clicked="AllInButton_Clicked" />
+                <Button x:Name="CheckCallRightButton" Text="Check/Call" Style="{StaticResource CallButtonStyle}" Clicked="CheckCallButton_Clicked" />
+                <Button x:Name="FoldButton" Text="Fold" Style="{StaticResource FoldTappableButtonStyle}" Clicked="FoldButton_Clicked" />
+                <Button x:Name="NextHandButton" Text="Start Game" Style="{StaticResource NextHandButtonStyle}"
+                        Clicked="NextHandButton_Clicked" />
+            </HorizontalStackLayout>
+        </Border>
+
+    </Grid>
+
+</ContentPage>

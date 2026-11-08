@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>TexasHoldem</AssemblyName>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="AppIcon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\TexasHoldem.Logic\TexasHoldem.Logic.csproj" />
+    <ProjectReference Include="..\..\AI\TexasHoldem.AI.DummyPlayer\TexasHoldem.AI.DummyPlayer.csproj" />
+    <ProjectReference Include="..\..\AI\TexasHoldem.AI.SmartPlayer\TexasHoldem.AI.SmartPlayer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\cardTable.png">
+      <Link>Assets\cardTable.png</Link>
+    </Resource>
+  </ItemGroup>
+
+</Project>
