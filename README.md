@@ -1,10 +1,20 @@
 # Texas Hold'em
 
-Play no-limit Texas Hold'em against seven computer opponents, each with a style of its own: the rock who waits for premium hands, the calling station who never folds, the loose-aggressive player who raises with anything. Learn to read them, and when you are unsure, an advice panel shows the play it would make and why.
+Play no-limit Texas Hold'em against seven computer opponents, each with a style of its own: the rock who waits for strong hands, the calling station who calls often, the loose-aggressive player who plays many hands aggressively. Learn to read them, and when you are unsure, an advice panel suggests a play and explains why.
 
-Runs as a Windows desktop app and as an Android app, one file each, nothing to install. Everything happens on your device: no account, no internet connection, no ads, no tracking. Nothing you do at the table ever leaves your machine.
+Available as a Windows desktop app and an Android tablet app. Unzip the Windows download, or install the Android APK. Everything happens on your device: no account, no internet connection, no ads, no tracking. Nothing you do at the table ever leaves your machine.
+
+I built this for myself because I wanted to play poker without the casino spectacle. No sound, animated characters or long waits between hands. Just a readable table, quick decisions and another hand when I'm ready.
+
+[**How to play**](Docs/HOW_TO_PLAY.md) covers both apps, the Fold shortcut, betting buttons, AI advice and Windows keyboard shortcuts.
+
+### Windows
 
 ![The Windows table mid-hand](Docs/images/windows-table.png)
+
+### Android tablet
+
+![The Android table with all cards visible and AI advice open](Docs/images/tablet-midhand.png)
 
 ## Download
 
@@ -15,9 +25,9 @@ Ready-to-run builds are on the [Releases page](https://github.com/Edge358/TexasH
 - You sit at an eight-seat table against seven AI players: a nit, a rock, a tight-aggressive, a loose-aggressive, a calling station, a weak-tight player and an aggressive fish. They play differently and you can learn to read them.
 - Stakes from 1/2 up to 100/200, chosen before each session. Stacks start at 100 big blinds.
 - Bet sizing buttons for 1/3, 1/2, 2/3 and full pot, 1.5x, 2x, 3x and all in, next to the usual Fold, Check/Call and Raise.
-- An advice panel suggests a play for your hand on each street, with the reasoning and your pot odds and equity. Use it to learn, or ignore it.
+- An advice panel suggests a play for your hand on each street, with the reasoning, pot odds and estimated equity. Use it to learn, or ignore it.
 - You choose whether the other players' cards are shown. On Windows: all cards, your cards only, or peek on hover. On Android: always, at showdown, or for everyone when the hand ends.
-- A hand log records every action.
+- The Windows Log button opens the hand history.
 
 ## Two apps, one engine
 
@@ -68,10 +78,11 @@ dotnet test Tests/TexasHoldem.Logic.Tests
 
 ## Documentation
 
-- `Docs/TexasHoldem_BluePrint.md`: how the engine, the WPF table and the AI panel fit together.
-- `Docs/aiResponse.md`: the format and tiers behind the advice panel.
-- `Docs/ToDo`: feature plans not yet built.
-- `AGENTS.md`: build and style notes for coding agents.
+- [How to play](Docs/HOW_TO_PLAY.md): Android and Windows controls, shortcuts and illustrated instructions.
+- [Architecture](Docs/TexasHoldem_BluePrint.md): the engine, apps and shared presentation layer.
+- [AI advice reference](Docs/aiResponse.md): how the advice text is produced.
+- [Future ideas](PROJECT_TODO.md): features outside the current game.
+- [Agent notes](AGENTS.md): build and style notes for coding agents.
 
 ## Credits and license
 
